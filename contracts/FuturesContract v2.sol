@@ -10,7 +10,7 @@ contract FuturesContract {
     uint public collateral;
     uint public collateralOfOwner;
     uint public collateralOfTaker;
-    bool public longORshort // this variable should be assigned to owner and taker at the contract creation, how best to do it? mapping? it's binary variable owner declares himself to be either "short" or "long" and taker has to take the other side of the trade
+    bool public ownerIsLong // this variable should be assigned to owner and taker at the contract creation, how best to do it? mapping? it's binary variable owner declares himself to be either "short" or "long" and taker has to take the other side of the trade
     address owner;
     address taker;
 
@@ -21,12 +21,12 @@ contract FuturesContract {
     event LogPhaseSwitch(Phase phase); // whats the purpose of this? 
     
 
-    function FuturesContract(uint _neutralExRate, uint _matirityTime, uint _collateral, bool _longORshort){
+    function FuturesContract(uint _neutralExRate, uint _matirityTime, uint _collateral, bool _ownerIsLong){
         owner = msg.sender;
         neutralExRate = _neutralExRate;
         matirityTime = _matirityTime;
         collateral = _collateral;
-        longORshort = _longORshort;
+        ownerIsLong = _ownerIsLong;
     }
 
 
@@ -68,7 +68,7 @@ contract FuturesContract {
         return taker;
     }
 
-    function validFunding() internal view returns (bool) { // what does "view" do?
+    function validFunding() internal constant returns (bool) { // what does "view" do?
         bool withinPeriod = now <= matirityTime;
         bool nonZeroPurchase = msg.value > 0; //                  is this necessary?
         bool aboveLimit = msg.value >= collateral;
@@ -87,7 +87,7 @@ contract FuturesContract {
     }
 
     // Constant functions
-    function getCurrentPhase() public view returns (string CurrentPhase) {
+    function getCurrentPhase() public constant returns (string CurrentPhase) {
         if (currentPhase == Phase.Created) {
             return "Created";
         } else if (currentPhase == Phase.Waiting) {
@@ -99,18 +99,24 @@ contract FuturesContract {
         
     }
     
-    function liquidateByMe(unit liquidationExRate) internal view returns (bool) {       // liquidationPrice can be set internaly by getPrice function if conditions are met
-       profit = (liquidationExRate - neutralExRate)
-       if (profit >= 0) {
-           FuturesContract.send(profit); // ! need to specify send to long seller | this is probably wrong - how to best send funds from smart contract? also I  
-           FuturesContract.send(collateralOfOwner); // ! need to specify send to owner |
-           FuturesContract.send(rest); // ! need to specify send  the rest of funds to taker |
-       else if (profit < 0) {
-           absProfit = (-1 * profit);
-           FuturesContract.send(absProfit); // ! need to specify send to owner | this is probably wrong - how to best send funds from smart contract? also I  
-           FuturesContract.send(collateralOfTaker); // ! need to specify send to taker |
-           FuturesContract.send(rest); // ! need to specify send  the rest of funds to taker |
-       }
+    function liquidateByMe(unit liquidationExRate) internal returns (bool) {       // liquidationPrice can be set internaly by getPrice function if conditions are met
+       uint profit = (liquidationExRate - neutralExRate)
+       
+           if ((profit >= 0 && ownerIsLong == true) || (profit < 0 && ownerIsLong == false)) {
+           if(profit < 0) {
+               profit = -1 * profit}
+               
+           owner.transfer(collateralOfOwner + profit);
+           taker.transfer(collateralOfTaker - profit);
+           }
+           
+        if(profit < 0) {
+               profit = -1 * profit}
+               
+            owner.transfer(collateralOfOwner - profit);
+            taker.transfer(collateralOfTaker + profit);
+           
+              }
     }
     //
 }
